@@ -3,49 +3,74 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Sơ đồ lớp</title>
+  <title>Sơ đồ lớp - 4 tổ × 6 bàn</title>
+  <!-- Tailwind CDN (ok để dùng nhanh; bỏ qua cảnh báo khi deploy) -->
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    /* nhỏ gọn để bàn có tỉ lệ đẹp */
+    /* Tỉ lệ bàn hiển thị đẹp */
     .desk {
-      width: 170px;
-      height: 80px;
+      width: 180px;
+      height: 90px;
       min-width: 150px;
+    }
+    .teacher-desk {
+      width: 220px;
+      height: 110px;
+    }
+    .door {
+      width: 110px;
+      height: 60px;
     }
     @media (max-width: 900px) {
       .desk { width: 140px; height: 72px; }
+      .teacher-desk { width: 160px; height: 88px; }
+      .door { width: 90px; height: 52px; }
     }
   </style>
 </head>
 <body class="bg-gradient-to-br from-white via-sky-50 to-white min-h-screen p-6 text-gray-800">
-
   <div class="max-w-7xl mx-auto">
-    <!-- Header: teacher (left) + title center + door (right) -->
+    <!-- Header: teacher (left) + title + door (right) -->
     <div class="flex items-center justify-between mb-6">
+      <!-- Teacher desk (top-left, larger) -->
       <div class="flex items-center space-x-3">
-        <div class="bg-yellow-100 border border-yellow-300 rounded-lg shadow px-4 py-2 text-sm font-semibold">Bàn giáo viên</div>
-        <div class="text-sm text-gray-500"> </div>
+        <div id="teacherDesk" class="teacher-desk bg-yellow-50 border border-yellow-200 rounded-xl shadow-md flex flex-col items-center justify-center p-3">
+          <div class="text-sm font-semibold text-gray-700">Bàn giáo viên</div>
+          <div class="text-xs text-gray-500 mt-1">(không sửa)</div>
+        </div>
       </div>
 
-      <h1 class="text-xl font-bold text-gray-700">Sơ đồ lớp</h1>
+      <h1 class="text-xl font-bold text-gray-700">Sơ đồ lớp — 4 tổ × 6 bàn</h1>
 
-      <div class="flex items-center space-x-2">
-        <div class="text-sm text-gray-500">Cửa lớp</div>
-        <div class="w-8 h-8 bg-gray-100 rounded-md flex items-center justify-center text-sm text-gray-600 border">🚪</div>
+      <!-- Door (top-right, larger) and teacher-mode indicator -->
+      <div class="flex items-center space-x-4">
+        <div id="teacherStatus" class="text-sm text-gray-600">Quyền: <span id="roleLabel">Khách</span></div>
+        <div id="doorBox" class="door bg-gray-100 border border-gray-200 rounded-md shadow flex items-center justify-center text-sm text-gray-700">
+          🚪<span class="ml-2 hidden sm:inline">Cửa lớp</span>
+        </div>
       </div>
     </div>
 
-    <!-- Main grid: 4 columns (T4 .. T1) -->
-    <div id="classGrid" class="grid grid-cols-4 gap-6 justify-center"></div>
+    <!-- Main area: spacing between groups (each column is 1 tổ) -->
+    <div class="mb-3 text-sm text-gray-500">Gợi ý: Click vào bàn để sửa (chỉ giáo viên được chỉnh). Nếu bạn chưa xác thực, hệ thống sẽ hỏi mã giáo viên một lần.</div>
+
+    <div id="gridWrap" class="flex flex-row gap-10 justify-center">
+      <!-- We'll dynamically insert 4 columns (T4..T1) with spacing between -->
+    </div>
 
     <!-- Status -->
     <div id="status" class="mt-6 text-sm text-gray-500">Kết nối tới Firestore...</div>
+
+    <!-- Small control: logout teacher -->
+    <div class="mt-4">
+      <button id="logoutBtn" class="px-3 py-1 text-sm bg-gray-200 rounded-md hover:bg-gray-300">Đăng xuấtGV</button>
+    </div>
   </div>
 
-  <!-- Modal -->
+  <!-- Modal (center) -->
   <div id="modalBackdrop" class="hidden fixed inset-0 bg-black/40 flex items-center justify-center z-40">
     <div class="bg-white rounded-xl shadow-xl w-96 p-6">
-      <h2 id="modalTitle" class="text-lg font-semibold text-gray-700 mb-3">Chỉnh sửa - </h2>
+      <h2 id="modalTitle" class="text-lg font-semibold text-gray-700 mb-3">Chỉnh sửa</h2>
       <div class="space-y-3">
         <input id="inp1" placeholder="Học sinh 1" class="w-full border rounded-md p-2 text-sm" />
         <input id="inp2" placeholder="Học sinh 2" class="w-full border rounded-md p-2 text-sm" />
@@ -59,7 +84,7 @@
 
   <!-- Firebase + App logic -->
   <script type="module">
-    // Firebase (ESM CDN) - version chosen to be stable in browsers.
+    // Firebase (ESM CDN) - same major as previously used
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
     import {
       getFirestore,
@@ -85,7 +110,7 @@
     const collRef = collection(db, "classroom");
 
     // DOM refs
-    const classGrid = document.getElementById("classGrid");
+    const gridWrap = document.getElementById("gridWrap");
     const statusEl = document.getElementById("status");
     const modalBackdrop = document.getElementById("modalBackdrop");
     const modalTitle = document.getElementById("modalTitle");
@@ -93,46 +118,96 @@
     const inp2 = document.getElementById("inp2");
     const btnSave = document.getElementById("btnSave");
     const btnCancel = document.getElementById("btnCancel");
+    const roleLabel = document.getElementById("roleLabel");
+    const logoutBtn = document.getElementById("logoutBtn");
 
-    // Keep current editing table id
     let currentTableId = null;
 
-    // Render layout: columns left-to-right = T4, T3, T2, T1
+    // Teacher auth: check localStorage
+    function isTeacher() {
+      return localStorage.getItem("isTeacher") === "1";
+    }
+    function setTeacher(flag) {
+      if (flag) localStorage.setItem("isTeacher", "1");
+      else localStorage.removeItem("isTeacher");
+      updateRoleLabel();
+    }
+    function updateRoleLabel() {
+      roleLabel.innerText = isTeacher() ? "Giáo viên" : "Khách";
+      roleLabel.className = isTeacher() ? "text-green-600 font-semibold" : "text-gray-600";
+    }
+
+    logoutBtn.addEventListener("click", () => {
+      setTeacher(false);
+      alert("Đã đăng xuất quyền giáo viên. Bạn là Khách.");
+    });
+
+    // Render layout with spacing between groups (left-to-right: T4, T3, T2, T1)
     function renderLayout() {
-      classGrid.innerHTML = ""; // clear
-      const order = [4, 3, 2, 1]; // left-to-right
-      for (const t of order) {
+      gridWrap.innerHTML = "";
+      const order = [4,3,2,1]; // left-to-right
+      order.forEach(t => {
         const col = document.createElement("div");
-        col.className = "flex flex-col items-center space-y-4";
-        // Column header
+        col.className = "flex flex-col items-center gap-4";
+        // group header spacing
         const header = document.createElement("div");
         header.className = "text-sm font-medium text-gray-600 mb-1";
         header.innerText = `Tổ ${t}`;
         col.appendChild(header);
-        // 6 desks top -> bottom (B1..B6)
+
         for (let b = 1; b <= 6; b++) {
           const id = `T${t}-B${b}`;
           const desk = document.createElement("div");
           desk.id = id;
-          desk.className = "desk bg-white rounded-lg shadow border border-gray-200 cursor-pointer hover:shadow-md transition";
-          // split into two halves
+          desk.className = "desk bg-white rounded-lg shadow border border-gray-200 cursor-pointer hover:shadow-md transition relative overflow-hidden";
+          desk.style.display = "flex";
+          desk.style.flexDirection = "column";
+          // two halves horizontally
           desk.innerHTML = `
-            <div class="flex h-full">
-              <div class="w-1/2 border-r border-gray-100 p-2 flex items-center justify-center text-xs text-gray-700" id="${id}-s1"> </div>
-              <div class="w-1/2 p-2 flex items-center justify-center text-xs text-gray-700" id="${id}-s2"> </div>
+            <div class="flex flex-row h-full">
+              <div class="w-1/2 border-r border-gray-100 p-2 flex items-center justify-center text-xs text-gray-700" id="${id}-s1"></div>
+              <div class="w-1/2 p-2 flex items-center justify-center text-xs text-gray-700" id="${id}-s2"></div>
             </div>
-            <div class="absolute -translate-y-4 text-[11px] text-gray-500" style="margin-top: -18px; margin-left: 6px;">${id}</div>
+            <div class="absolute -top-4 left-2 text-[11px] text-gray-500">${id}</div>
           `;
-          // position relative needed for label; apply
-          desk.style.position = "relative";
-          desk.onclick = () => openModalFor(id);
+
+          desk.onclick = (ev) => {
+            // prevent accidental double click from clicking inner elements
+            ev.stopPropagation();
+            tryOpenEditorFor(id);
+          };
+
           col.appendChild(desk);
         }
-        classGrid.appendChild(col);
-      }
+
+        // add some horizontal spacing container wrapper so there is visible gap between groups
+        const wrapper = document.createElement("div");
+        wrapper.appendChild(col);
+        gridWrap.appendChild(wrapper);
+      });
     }
 
-    // Open modal for a desk
+    // Try open editor: ask auth once if needed
+    async function tryOpenEditorFor(tableId) {
+      if (!isTeacher()) {
+        // ask once via prompt
+        const code = prompt("Nhập mã giáo viên để cho phép chỉnh sửa (mã là gv123):");
+        if (code === null) {
+          // user cancelled
+          return;
+        }
+        if (code.trim() === "gv123") {
+          setTeacher(true);
+          alert("Xác thực thành công — bạn có quyền chỉnh sửa.");
+        } else {
+          alert("Bạn không có quyền chỉnh sửa (mã không đúng).");
+          return;
+        }
+      }
+      // open modal
+      openModalFor(tableId);
+    }
+
     function openModalFor(tableId) {
       currentTableId = tableId;
       const s1 = document.getElementById(`${tableId}-s1`)?.innerText || "";
@@ -141,7 +216,6 @@
       inp2.value = s2;
       modalTitle.innerText = `Chỉnh sửa: ${tableId}`;
       modalBackdrop.classList.remove("hidden");
-      // focus first input
       setTimeout(() => inp1.focus(), 120);
     }
 
@@ -154,53 +228,58 @@
 
     btnSave.addEventListener("click", async () => {
       if (!currentTableId) return;
+      if (!isTeacher()) {
+        alert("Bạn không có quyền lưu (mã GV chưa xác thực).");
+        closeModal();
+        return;
+      }
       const payload = {
         student1: inp1.value.trim(),
         student2: inp2.value.trim()
       };
       try {
-        // write (merge semantics not necessary here; overwrite is fine)
         await setDoc(doc(db, "classroom", currentTableId), payload);
         statusEl.innerText = `✅ Đã lưu ${currentTableId}`;
       } catch (e) {
         console.error(e);
         statusEl.innerText = `❌ Lỗi lưu: ${e.message}`;
+        alert("Lỗi khi lưu dữ liệu: " + e.message);
       }
       closeModal();
     });
 
-    // Real-time listener: update displayed names when Firestore changes
-    onSnapshot(collRef, (snapshot) => {
-      // clear all first (so removed docs show empty)
-      // But to avoid flashing, we'll update only changed docs and also ensure empty desks are cleared
-      // Build map of docs
-      const docsMap = new Map();
-      snapshot.forEach(docSnap => {
-        docsMap.set(docSnap.id, docSnap.data());
-      });
+    // Realtime listener
+    function initRealtime() {
+      onSnapshot(collRef, (snapshot) => {
+        // Build map for quick lookup
+        const docsMap = new Map();
+        snapshot.forEach(ds => docsMap.set(ds.id, ds.data()));
 
-      // iterate all desks and fill
-      const order = [4,3,2,1];
-      for (const t of order) {
-        for (let b = 1; b <= 6; b++) {
-          const id = `T${t}-B${b}`;
-          const el1 = document.getElementById(`${id}-s1`);
-          const el2 = document.getElementById(`${id}-s2`);
-          if (!el1 || !el2) continue;
-          const data = docsMap.get(id);
-          el1.innerText = (data && data.student1) ? data.student1 : '';
-          el2.innerText = (data && data.student2) ? data.student2 : '';
+        const order = [4,3,2,1];
+        for (const t of order) {
+          for (let b = 1; b <= 6; b++) {
+            const id = `T${t}-B${b}`;
+            const el1 = document.getElementById(`${id}-s1`);
+            const el2 = document.getElementById(`${id}-s2`);
+            if (!el1 || !el2) continue;
+            const data = docsMap.get(id);
+            el1.innerText = (data && data.student1) ? data.student1 : "";
+            el2.innerText = (data && data.student2) ? data.student2 : "";
+          }
         }
-      }
 
-      statusEl.innerText = `🟢 Đồng bộ với Firestore — cập nhật ${snapshot.size} bản ghi`;
-    }, (err) => {
-      console.error('Listen error', err);
-      statusEl.innerText = `❌ Lỗi kết nối Firestore: ${err.message}`;
-    });
+        statusEl.innerText = `🟢 Đồng bộ với Firestore — ${snapshot.size} bản ghi`;
+      }, (err) => {
+        console.error("Listen error", err);
+        statusEl.innerText = `❌ Lỗi kết nối Firestore: ${err.message}`;
+      });
+    }
 
-    // initial render
+    // initial
     renderLayout();
+    updateRoleLabel();
+    initRealtime();
+
   </script>
 </body>
 </html>
