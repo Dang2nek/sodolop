@@ -1,1 +1,165 @@
 
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sơ đồ lớp - Firebase + Mermaid</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+    import {
+      getFirestore,
+      collection,
+      addDoc,
+      doc,
+      setDoc,
+      deleteDoc,
+      onSnapshot,
+      serverTimestamp,
+      query,
+      orderBy
+    } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+
+    // ===== Firebase Config =====
+    const firebaseConfig = {
+      apiKey: "AIzaSyCuefMU1tBla-APHbHIE83UVLwHq83i27E",
+      authDomain: "sodolop-8c8a3.firebaseapp.com",
+      projectId: "sodolop-8c8a3",
+      storageBucket: "sodolop-8c8a3.firebasestorage.app",
+      messagingSenderId: "66493252313",
+      appId: "1:66493252313:web:fdb07cdf8ce38a0f42b4c8",
+      measurementId: "G-67J2WTW7EV"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    mermaid.initialize({ startOnLoad: false, theme: "default" });
+
+    // ===== Main App Logic =====
+    document.addEventListener("DOMContentLoaded", async () => {
+      const textArea = document.getElementById("diagramText");
+      const preview = document.getElementById("preview");
+      const list = document.getElementById("diagramList");
+      const status = document.getElementById("status");
+      let selectedId = null;
+
+      function renderDiagram() {
+        const code = textArea.value.trim();
+        const id = "m" + Math.random().toString(36).slice(2);
+        preview.innerHTML = `<div class='mermaid' id='${id}'>${code}</div>`;
+        try {
+          mermaid.init(undefined, "#" + id);
+        } catch (e) {
+          preview.innerHTML = `<div class='text-red-500 text-sm'>Lỗi: ${e.message}</div>`;
+        }
+      }
+
+      async function saveNew() {
+        const col = collection(db, "diagrams");
+        await addDoc(col, {
+          text: textArea.value,
+          title: textArea.value.split("\n")[0]?.slice(0, 50) || "Untitled",
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        });
+        status.innerText = "✅ Đã lưu mới";
+      }
+
+      async function update() {
+        if (!selectedId) return saveNew();
+        const d = doc(db, "diagrams", selectedId);
+        await setDoc(d, {
+          text: textArea.value,
+          title: textArea.value.split("\n")[0]?.slice(0, 50) || "Untitled",
+          updatedAt: serverTimestamp()
+        }, { merge: true });
+        status.innerText = "✅ Đã cập nhật";
+      }
+
+      async function remove(id) {
+        if (!confirm("Bạn có chắc muốn xóa sơ đồ này?")) return;
+        await deleteDoc(doc(db, "diagrams", id));
+        status.innerText = "🗑️ Đã xóa";
+      }
+
+      // Realtime listener
+      const q = query(collection(db, "diagrams"), orderBy("updatedAt", "desc"));
+      onSnapshot(q, (snapshot) => {
+        list.innerHTML = "";
+        snapshot.forEach((docSnap) => {
+          const d = docSnap.data();
+          const item = document.createElement("div");
+          item.className =
+            "p-2 rounded-lg border flex justify-between items-center hover:bg-gray-100 cursor-pointer transition";
+          item.innerHTML = `
+            <div class="flex-1">
+              <div class="font-medium truncate">${d.title}</div>
+              <div class="text-xs text-gray-500">${
+                d.updatedAt?.toDate
+                  ? d.updatedAt.toDate().toLocaleString()
+                  : ""
+              }</div>
+            </div>
+            <button class="text-xs bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600">Xóa</button>
+          `;
+          item.children[0].onclick = () => {
+            selectedId = docSnap.id;
+            textArea.value = d.text;
+            renderDiagram();
+          };
+          item.children[1].onclick = () => remove(docSnap.id);
+          list.appendChild(item);
+        });
+      });
+
+      // Event listeners
+      document.getElementById("saveBtn").onclick = saveNew;
+      document.getElementById("updateBtn").onclick = update;
+      textArea.addEventListener("input", renderDiagram);
+      renderDiagram();
+    });
+  </script>
+</head>
+<body class="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-sky-50 text-slate-800 p-6">
+  <div class="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-6">
+    <div class="md:col-span-2 space-y-4">
+      <header class="flex items-center justify-between">
+        <h1 class="text-3xl font-bold bg-gradient-to-r from-indigo-500 to-sky-500 bg-clip-text text-transparent">
+          Sơ đồ lớp (Mermaid + Firebase)
+        </h1>
+        <div class="space-x-2">
+          <button id="saveBtn" class="px-3 py-1 rounded-lg bg-indigo-500 text-white hover:bg-indigo-600 transition">Lưu mới</button>
+          <button id="updateBtn" class="px-3 py-1 rounded-lg bg-emerald-500 text-white hover:bg-emerald-600 transition">Cập nhật</button>
+        </div>
+      </header>
+
+      <textarea id="diagramText" rows="14" class="w-full rounded-lg p-3 font-mono bg-white/90 shadow-md border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-400 transition">classDiagram
+class Animal {
+  +String name
+  +int age
+  +eat()
+}
+class Dog {
+  +bark()
+}
+Animal <|-- Dog</textarea>
+
+      <div id="preview" class="rounded-lg p-4 border bg-white/90 shadow-md min-h-[200px]"></div>
+    </div>
+
+    <aside class="space-y-4">
+      <div class="rounded-lg p-4 border bg-white/90 shadow-md">
+        <h2 class="font-semibold text-lg mb-2">Danh sách sơ đồ</h2>
+        <div id="diagramList" class="space-y-2 max-h-72 overflow-auto pr-1 text-sm"></div>
+      </div>
+
+      <div class="rounded-lg p-4 border bg-white/90 shadow-md">
+        <h3 class="font-medium">Trạng thái</h3>
+        <div id="status" class="text-sm text-slate-600 mt-1">🟢 Sẵn sàng</div>
+      </div>
+    </aside>
+  </div>
+</body>
+</html>
