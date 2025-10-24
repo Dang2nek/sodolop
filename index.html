@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Sơ đồ lớp - 4 tổ × 6 bàn</title>
+  <title>Sơ đồ lớp</title>
   <!-- Tailwind CDN (ok để dùng nhanh; bỏ qua cảnh báo khi deploy) -->
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
@@ -36,11 +36,11 @@
       <div class="flex items-center space-x-3">
         <div id="teacherDesk" class="teacher-desk bg-yellow-50 border border-yellow-200 rounded-xl shadow-md flex flex-col items-center justify-center p-3">
           <div class="text-sm font-semibold text-gray-700">Bàn giáo viên</div>
-          <div class="text-xs text-gray-500 mt-1">(không sửa)</div>
+          <div class="text-xs text-gray-500 mt-1"></div>
         </div>
       </div>
 
-      <h1 class="text-xl font-bold text-gray-700">Sơ đồ lớp — 4 tổ × 6 bàn</h1>
+      <h1 class="text-xl font-bold text-gray-700">Sơ đồ lớp </h1>
 
       <!-- Door (top-right, larger) and teacher-mode indicator -->
       <div class="flex items-center space-x-4">
@@ -52,7 +52,7 @@
     </div>
 
     <!-- Main area: spacing between groups (each column is 1 tổ) -->
-    <div class="mb-3 text-sm text-gray-500">Gợi ý: Click vào bàn để sửa (chỉ giáo viên được chỉnh). Nếu bạn chưa xác thực, hệ thống sẽ hỏi mã giáo viên một lần.</div>
+    <div class="mb-3 text-sm text-gray-500">Click vào bàn để sửa</div>
 
     <div id="gridWrap" class="flex flex-row gap-10 justify-center">
       <!-- We'll dynamically insert 4 columns (T4..T1) with spacing between -->
@@ -191,7 +191,7 @@
     async function tryOpenEditorFor(tableId) {
       if (!isTeacher()) {
         // ask once via prompt
-        const code = prompt("Nhập mã giáo viên để cho phép chỉnh sửa (mã là gv123):");
+        const code = prompt("Nhập mã giáo viên để cho phép chỉnh sửa:");
         if (code === null) {
           // user cancelled
           return;
